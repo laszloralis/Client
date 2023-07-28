@@ -3,7 +3,7 @@
 //#########################################################
 
 import './App.css'
-import './protocol.js'
+import {ProtocolIO} from "./protocol.js";
 
 //  Websocket
 import { w3cwebsocket as W3CWebSocket } from "websocket";
@@ -46,12 +46,16 @@ import {
 let receivedPosts = {}
 
 //=========================================================
-//  for websocket
+//  Websocket
 //=========================================================
 let client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
 let aliveId = -1;
 let timeoutId = -1;
 
+//=========================================================
+// ProtocolIO
+//=========================================================
+let protocolIO = new ProtocolIO()
 
 //=========================================================
 // for accordionChanged function
@@ -85,37 +89,8 @@ const words1 = [
   {id: getUniqueId(), text: 'azaize', count: 45},
 ];
 
-const words2 = [
-  {id: getUniqueId(), text: 'lacikacska', count: 11},
-  {id: getUniqueId(), text: 'fifkecske', count: 3},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-  {id: getUniqueId(), text: 'zuzmoteacska', count: 45},
-];
-
 const initialBlogPosts = [
   new BlogPost('This is a blog post', words1),
-  new BlogPost('This is another blog post', words2),
-  new BlogPost('Not loaded blog post0', undefined),
-  new BlogPost('Not loaded blog post1', undefined),
-  new BlogPost('Not loaded blog post2', undefined),
-  new BlogPost('Not loaded blog post3', undefined),
 ];
 
 
@@ -135,9 +110,17 @@ function details(){
 //=========================================================
 function renderWords(wordData){
   return wordData.map( (value) => 
-    <HStack key={value.id} flexShrink="0" spacing='2px'>
-      <Button h='24px' border='1px' borderRightRadius='0px' onClick={details}>{value.text}</Button>
-      <Tag h='24px' border='1px' bg='#00000011' borderLeftRadius='0px'>{value.count}</Tag>
+  <Tag key={value[0]} flexShrink="0" spacing='2px'>
+    {value[0]} : {value[1]}
+  </Tag>
+);
+  
+
+
+  return wordData.map( (value) => 
+    <HStack key={value[0]} flexShrink="0" spacing='2px'>
+      <Button h='24px' border='1px' borderRightRadius='0px' onClick={details}>{value[0]}</Button>
+      <Tag h='24px' border='1px' bg='#00000011' borderLeftRadius='0px'>{value[1]}</Tag>
     </HStack>
   );
 }
@@ -166,33 +149,45 @@ function renderNotLoadedPost(blogPost){
 //=========================================================
 function renderLoadedPost(blogPost){
   console.log('renderLoadedPost ', blogPost.id);
-  const color = !blogPost.readed ? '#F7FFF7' : '#F7F7F7';
+  const color = blogPost.is_updated ? '#F7FFF7' : '#F7F7F7';
 
   return ( 
     <AccordionItem key={blogPost.id} bgColor={color}>
       <h2>
         <AccordionButton color='black' >
           <Box as="span" flex='1' textAlign='left'>
-            {blogPost.caption}
+            {blogPost.title}
           </Box>
           <AccordionIcon />
         </AccordionButton>
       </h2>
       <AccordionPanel pb={4}>
       <HStack spacing='10px' overflowX="auto" pb='15px'>
-          {renderWords(blogPost.dataElement)}
+          {renderWords(blogPost.words)}
       </HStack>
       </AccordionPanel>
     </AccordionItem>
   )
 }
 
+/*
+
+Examples:
+
+{"ack": "post", 
+    "obj": {"id": 15423, 
+            "title": "Weniger Stress im Alltag? 6 Tipps vom Experten", 
+            "date": "2023-07-01T16:09:09", 
+            "modify_date": "2023-07-14T14:29:46", 
+            "words": {"ab": 1, "aber": 7, "abhilfe": 1, "ablaufen": 1, "absolut": 1, "absolvieren": 1, "abstrakt": 2, "achten": 2, "achtest": 1, "achtsam": 1, "achtsamkeit": 4, "adrenalin": 1, "aktiv": 3, "aktivit\u00e4t": 1, ...
+*/
+
 //=========================================================
 //  renderBlogPosts
 //=========================================================
 function renderBlogPosts(blogPosts){
   return blogPosts.map( (blogPost) => 
-      blogPost.dataElement !== undefined ? renderLoadedPost(blogPost) : renderNotLoadedPost(blogPost)
+      blogPost.id !== undefined ? renderLoadedPost(blogPost) : renderNotLoadedPost(blogPost)
   )
 }
 
@@ -214,59 +209,38 @@ let WebSocketHandler = () => {
     }
   }
 
-  /*if (keepAlive > 0){
-    console.log('keepAlive is', keepAlive);
-  } else {
-    //clearInterval(aliveId);
-    //aliveId = -1;
-    console.log('keepAlive is expired');
-    //client.send('CLIENT: received!');
-  }
-*/
-
+  //---------------------------------------------------------
   client.onopen = () => {
     console.log('onopen')
 
+    // TODO!!! - clear receivedPosts
 
-    //let request = JSON.stringify({req: 'id_list'})
-    let request = JSON.stringify({req: 'post', id:'15423'})
-    client.send(request)
-    
-
+    //request the id-list from server
+    const request = protocolIO.requestIdList();
+    console.log('onopen REQ: ', request);
+    client.send(request);
 
     toast.closeAll();
     setAlarm(0); clearInterval(timeoutId);
     return <>{toast({id: 100, title: 'Connected to the server!', status: 'success', duration: 5000, isClosable: true })}</>;
   };
-
-  
+  //---------------------------------------------------------
   client.onmessage = (message) => {
     console.log('onmessage: ', message.data)
-    
-    let obj = JSON.parse(message.data)
-    if (obj['ack'] === undefined){
-      //broadcast
-    } else {
-      //ack
-      switch(obj['ack']){
-        case 'id_list': console.log('ID_LIST'); break;
-        case 'post': console.log('POST'); break;
-      }
+
+    const response = protocolIO.processMessage(message.data);
+    if (response !== undefined){
+      console.log('onmessage RESP: ', response);
+      client.send(response);
+      return undefined;
     }
-
-    let answerOrBroadcast = JSON.parse(message.data)
-    console.log(answerOrBroadcast['new_posts'])
-
-    
-    let answer = JSON.stringify({req: 'ack'})
-    client.send(answer);
   };
-  
+  //---------------------------------------------------------
   client.onerror = function() {
     console.log('onerror')
     
     clearInterval(timeoutId);
-    timeoutId = setTimeout( () => setAlarm((currentNumber) => currentNumber + 1), 10000);
+    timeoutId = setTimeout( () => setAlarm((currentNumber) => currentNumber + 1), 1000);
 
     if ((alarm < 2) && (!toast.isActive(400)))
       return <>{toast({id: 400, title: 'Connection error!', status: 'error', duration: null, isClosable: true })} </>;
@@ -275,6 +249,7 @@ let WebSocketHandler = () => {
       return <>{toast({id: 500, title: 'Failed to connect - Connection will be established if server is available...', status: 'warning', duration: null, isClosable: true })} </>;
     }
   };
+  //---------------------------------------------------------
 };
 
 
@@ -282,7 +257,13 @@ let WebSocketHandler = () => {
 // App
 //#########################################################
 function App() {
-  const [blogPosts, setBlogPosts] = useState(initialBlogPosts);
+  const [blogPosts, setBlogPosts] = useState([]);
+
+  //---------------------------------------------------------
+  // initialization of protocolIO
+  //---------------------------------------------------------
+  protocolIO.setPostDictionary(blogPosts, setBlogPosts)
+
 
   //---------------------------------------------------------
   // TEMPORARIES
@@ -327,7 +308,7 @@ function App() {
           //  readed: true,
           //};
           let updatedItem = item;
-          updatedItem.readed = true;
+          updatedItem.is_updated = true;
           return updatedItem;
         }
         return item;
