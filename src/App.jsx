@@ -5,12 +5,14 @@
 import './App.css'
 import {ProtocolIO} from "./protocol.js";
 
+import {Channel, createChannel, useChannel} from "./channels.js";
+
 //  Websocket
 import { w3cwebsocket as W3CWebSocket } from "websocket";
 
 // React elements
-import { useState } from 'react'
-//import { useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useTransition } from 'react'
+
 
 // Chakra Elements
 import {
@@ -26,30 +28,27 @@ import {
     Box, 
     Tag, 
     Button,
+    Text,
+    Card, CardHeader, CardBody, Wrap, WrapItem,
 
     Skeleton,
     Spacer,
-    useToast
+    Spinner,
+    useToast,
+    Flex, 
 } from '@chakra-ui/react'
-         
-//import { useBoolean} from '@chakra-ui/react'
-//import { useControllableProp, useControllableState } from '@chakra-ui/react'
 
+//we must use 'useDimensions' although it is marked as deprecated because 'useSize' is not awailable yet
+import { useConst, useDimensions } from '@chakra-ui/react'
 
 //#########################################################
 // Globals
 //#########################################################
 
 //=========================================================
-// for the Posts
-//=========================================================
-let receivedPosts = {}
-
-//=========================================================
 //  Websocket
 //=========================================================
 let client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
-let aliveId = -1;
 let timeoutId = -1;
 
 //=========================================================
@@ -62,36 +61,6 @@ let protocolIO = new ProtocolIO()
 //=========================================================
 let accordionExpandedIndex_last = -1
 
-//=========================================================
-// getUniqueId function
-//=========================================================
-let globalBlogPostId = 0;
-function getUniqueId(){
-  return globalBlogPostId++;
-}
-
-//#########################################################
-// TEMPORARIES
-//#########################################################
-class BlogPost{
-  constructor(caption, wordList){
-    this.id = getUniqueId();
-    this.caption = caption;
-    this.dataElement = wordList;
-    this.updateCounter = 0;
-    this.readed = false;
-  }
-};
-
-const words1 = [
-  {id: getUniqueId(), text: 'csubakka', count: 11},
-  {id: getUniqueId(), text: 'bela', count: 3},
-  {id: getUniqueId(), text: 'azaize', count: 45},
-];
-
-const initialBlogPosts = [
-  new BlogPost('This is a blog post', words1),
-];
 
 
 //#########################################################
@@ -99,115 +68,13 @@ const initialBlogPosts = [
 //#########################################################
 
 //=========================================================
-//  details
-//=========================================================
-function details(){
-  console.log('details');
-}
-
-//=========================================================
-//  renderWords
-//=========================================================
-function renderWords(wordData){
-  return wordData.map( (value) => 
-  <Tag key={value[0]} flexShrink="0" spacing='2px'>
-    {value[0]} : {value[1]}
-  </Tag>
-);
-  
-
-
-  return wordData.map( (value) => 
-    <HStack key={value[0]} flexShrink="0" spacing='2px'>
-      <Button h='24px' border='1px' borderRightRadius='0px' onClick={details}>{value[0]}</Button>
-      <Tag h='24px' border='1px' bg='#00000011' borderLeftRadius='0px'>{value[1]}</Tag>
-    </HStack>
-  );
-}
-
-//=========================================================
-//  renderNotLoadedPost
-//=========================================================
-function renderNotLoadedPost(blogPost){
-  console.log('renderNotLoadedPost ', blogPost.id);
-  //<Skeleton border='1px' borderRadius='6px' w={100 + (Math.floor(Math.random() * 100.00))} h='25px' />
-  return (
-    <AccordionItem key={blogPost.id} isDisabled>
-      <h2>
-        <AccordionButton>
-          <Skeleton border='1px' borderRadius='6px' w='160px' h='25px' />
-          <Spacer/>
-          <AccordionIcon />
-        </AccordionButton>
-      </h2>
-    </AccordionItem>
-  )
-}
-
-//=========================================================
-//  renderLoadedPost
-//=========================================================
-function renderLoadedPost(blogPost){
-  console.log('renderLoadedPost ', blogPost.id);
-  const color = blogPost.is_updated ? '#F7FFF7' : '#F7F7F7';
-
-  return ( 
-    <AccordionItem key={blogPost.id} bgColor={color}>
-      <h2>
-        <AccordionButton color='black' >
-          <Box as="span" flex='1' textAlign='left'>
-            {blogPost.title}
-          </Box>
-          <AccordionIcon />
-        </AccordionButton>
-      </h2>
-      <AccordionPanel pb={4}>
-      <HStack spacing='10px' overflowX="auto" pb='15px'>
-          {renderWords(blogPost.words)}
-      </HStack>
-      </AccordionPanel>
-    </AccordionItem>
-  )
-}
-
-/*
-
-Examples:
-
-{"ack": "post", 
-    "obj": {"id": 15423, 
-            "title": "Weniger Stress im Alltag? 6 Tipps vom Experten", 
-            "date": "2023-07-01T16:09:09", 
-            "modify_date": "2023-07-14T14:29:46", 
-            "words": {"ab": 1, "aber": 7, "abhilfe": 1, "ablaufen": 1, "absolut": 1, "absolvieren": 1, "abstrakt": 2, "achten": 2, "achtest": 1, "achtsam": 1, "achtsamkeit": 4, "adrenalin": 1, "aktiv": 3, "aktivit\u00e4t": 1, ...
-*/
-
-//=========================================================
-//  renderBlogPosts
-//=========================================================
-function renderBlogPosts(blogPosts){
-  return blogPosts.map( (blogPost) => 
-      blogPost.id !== undefined ? renderLoadedPost(blogPost) : renderNotLoadedPost(blogPost)
-  )
-}
-
-//=========================================================
 //  Websocket Handler with ToastContainer
 //=========================================================
-let WebSocketHandler = () => {
+let StateMessages = () => {
   const toast = useToast()
 
   const [alarm, setAlarm] = useState(0);
   //const [keepAlive, setKeepAlive] = useState(1);
-
-  if (alarm > 0){
-    console.log('alarm...:', alarm)
-    if (client.readyState === client.CLOSED){
-      console.log('new client started...')
-      client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
-      //setKeepAlive(1);
-    }
-  }
 
   //---------------------------------------------------------
   client.onopen = () => {
@@ -253,86 +120,363 @@ let WebSocketHandler = () => {
 };
 
 
+//=========================================================
+//  details
+//=========================================================
+function details(){
+  console.log('details');
+}
+
+//=========================================================
+// getWordCountColor(count)
+//=========================================================
+function getWordCountColor(count){
+  //creating a static-like function variable
+  if (getWordCountColor.colors === undefined)
+    getWordCountColor.colors = {}
+  const colors = getWordCountColor.colors;
+
+  //key from count
+  const color_key = String(count);
+  //function to create random intensity in r,g,b channel
+  function randomIntensity(){
+    const minIntensity = 80; //0 .. 255
+    const quantum = 10;
+    //discreet values in range ~0..255 with quantum
+    return ( Math.floor(minIntensity/quantum + Math.random() * ( (255 - minIntensity)/quantum ) ) * quantum ).toString(16);
+  }
+  //if we have a color to the count
+  //  - use it!
+  //  - otherwise create it!
+  let color = colors[color_key];
+  if (color === undefined){
+    color = `#${randomIntensity()}${randomIntensity()}${randomIntensity()}`;
+    colors[color_key] = color;
+  }
+
+  return color;
+}
+
+//=========================================================
+//  Words
+//=========================================================
+function Word({word, count}){
+  const color = getWordCountColor(count);
+
+  return (
+    <WrapItem>
+      <HStack spacing='0px'>
+        <Tag h='24px' border='1px' borderRightRadius='0px' >{word}</Tag>
+        <Tag h='24px' borderTop='1px' borderRight='1px' borderBottom='1px' bg={color} borderLeftRadius='0px'>{count}</Tag>
+      </HStack>
+    </WrapItem>
+  );
+}
+/*
+      <Box borderRadius = '10px' border = '1px' spacing='2px' bg={color} pl='8px' pr='8px'>
+        {word} : {count}
+      </Box> 
+*/
+
+//=========================================================
+// WordCard
+//=========================================================
+function WordCard({title, words}){
+  const maxWidth = 150;   // only estimation, we don't need an exact value
+  const padding = 10;
+  const wordsPerRow = 10; // only estimation, we don't need an exact value
+
+  return(
+    <Card border='1px' minW='auto' >
+      <CardHeader>
+        <Heading> {title} </Heading>
+      </CardHeader>
+      <CardBody>
+        <Wrap minW='min-content' w= {padding + words.length * maxWidth / Math.min(words.length, wordsPerRow) } direction='row' spacing='10px' justify='center'>
+          {words.map((item) => <Word key={item[0]} word={item[0]} count={item[1]} /> )}
+        </Wrap>
+      </CardBody>
+    </Card>
+  );
+}
+
+//=========================================================
+//  WordGroups
+//=========================================================
+function Words({words}){
+  console.log('WordGroups')
+
+  let components = [];
+
+  let n = 0;
+  while(n < words.length){
+    const last = words[n][0];
+    // split words to groups
+    const group = words.filter( (item) => { const [word, count] = item; return (last[0] === word[0]); } );
+
+    components.push(
+      <WordCard key={last[0]} title={last[0]} words={group}/>
+    );
+
+    n += group.length;
+  }
+
+  return components;
+}
+
+//=========================================================
+//  renderNotLoadedPost
+//=========================================================
+function PostSkeleton({post}){
+  console.log('PostSkeleton ', post.id);
+  const randomWidth = useConst( 150 + (Math.floor(Math.random() * 100.00)) );
+
+  return (
+    <AccordionItem isDisabled>
+      <h2>
+        <AccordionButton>
+          <Skeleton border='1px' borderRadius='6px' w={randomWidth} h='25px'/>
+          <Spacer/>
+          <AccordionIcon />
+        </AccordionButton>
+      </h2>
+    </AccordionItem>
+  )
+}
+
+//=========================================================
+//  LoadedPost
+//=========================================================
+function PostReady({post}){
+  console.log('PostReady ', post.id);
+
+  const newColor = '#F7FFF7';
+  const oldColor = '#E0E0E0';
+
+  const [isPending, startTransition] = useTransition();
+  const [wordComponent, setWordComponent] = useState(undefined);
+
+  const message = useChannel('blogPosts', post.id);
+  const lastMessage = useRef(message);
+
+  if (message !== lastMessage.current){
+    console.log(post.id, ': NEW MESSAGE RECEIVED: ', message);
+  }
+
+  const handleClick = () => {
+      if ( (wordComponent === undefined) && (post.words !== undefined) ){
+        let data = null;
+        startTransition(() => { data = <Words words = {post.words} /> } );
+        setWordComponent(data);
+      }
+  };
+
+  const color = (post.status !== 'old') ? newColor : oldColor;
+  return (  <AccordionItem bgColor={color}>
+              <h2>
+                <AccordionButton visibility color='black' onClick={handleClick}>
+                  <Box as="span" flex='1' textAlign='left'>
+                    {post.title}
+                  </Box>
+                  <AccordionIcon />
+                </AccordionButton>
+              </h2>
+              <AccordionPanel pb={4} >
+              
+                <HStack spacing='10px' overflowX="auto" pb='15px' align='top'>
+                  {isPending === false ? wordComponent : <Spinner key='spinner' />}
+                </HStack>
+              </AccordionPanel>
+            </AccordionItem>
+          );
+}
+
+//=========================================================
+//  Post
+//=========================================================
+function Post({post}){
+  return ((post.words !== undefined) ? <PostReady post={post} /> : <PostSkeleton post={post} />);
+}
+
+
+//=========================================================
+//=========================================================
+//=========================================================
+//=========================================================
+
+
+//=========================================================
+//=========================================================
+//=========================================================
+//=========================================================
+
+//=========================================================
+//  BlogPosts
+//=========================================================
+function BlogPosts({posts}){
+  const lastIdx = useRef(-1);
+  
+  const bpChannel = createChannel('blogPosts');
+
+  const handleChg = (idx) => {
+    console.log('idx: ', idx);
+    console.log('last idx: ', lastIdx.current);
+
+    if (lastIdx.current !== -1){
+      console.log('post id ', posts[lastIdx.current].id);
+
+      bpChannel.notify(posts[lastIdx.current].id);
+
+      posts[lastIdx.current].status = 'old';
+    }
+    lastIdx.current = idx;
+  }
+
+  const components = posts.map( (blogPost) => <Post key = {blogPost.id} post = {blogPost} />);
+
+  return(
+    <Accordion w='95vw' h='90%'  allowToggle overflowX="auto" onChange={handleChg}>
+      {components}
+    </Accordion>
+  );
+}
+
+
+
+
+
+
+
+
+
+let myList = [
+  {id: '1', title:'csubi', words:[]},
+  {id: '2', title:'subi', words:[]},
+  {id: '3', title:'dubi', words:[]},
+  {id: '4', title:'lala', words:[]},
+  {id: '5', title:'lulu', words:[]},
+  {id: '6', title:'lele', words:[]},
+];
+
+function BP({children}){
+
+console.log(children);
+
+  return <>{children}</>;
+
+}
+
+function TestComponent({name}){
+  console.log('Testcomponent ', name, ' rendered!');
+  return (<Text>{name}</Text>);
+}
+
+
 //#########################################################
 // App
 //#########################################################
 function App() {
-  const [blogPosts, setBlogPosts] = useState([]);
+  //const [blogPosts, setBlogPosts] = useState([]);
+  const [refresh, setRefresh] = useState(0);
+  const [alarm, setAlarm] = useState(0);
 
-  //---------------------------------------------------------
-  // initialization of protocolIO
-  //---------------------------------------------------------
-  protocolIO.setPostDictionary(blogPosts, setBlogPosts)
-
-
-  //---------------------------------------------------------
-  // TEMPORARIES
-  //---------------------------------------------------------
-  function fn1(){
-    console.log('fn1-1')
-    let post = new BlogPost('Kutykurutty', [{id: getUniqueId(), text: 'lilaliba', count: 1}, {id: getUniqueId(), text: 'lalaluli', count: 2},]);
-    const newBlogPosts = blogPosts.concat(post);
-    console.log(newBlogPosts)
-    setBlogPosts(newBlogPosts);
-  }
-  //---------------------------------------------------------
-  function fn2(){    
-    let newBlogPosts = blogPosts.map((item) => {
-      if (item.id === 25) {
-        let updatedItem = item;
-        updatedItem.readed = false;
-        return updatedItem;
-      }
-      return item;
-    });
-    setBlogPosts(newBlogPosts);
-  }
-  //---------------------------------------------------------
-  function fn3(){
-    const newBlogPosts = blogPosts.filter((item) => item.id !== blogPosts[blogPosts.length-1].id)
-    setBlogPosts(newBlogPosts);
-  }
-  //---------------------------------------------------------
-
-  //=========================================================
-  // accordionChanged(index)
-  // - to check and mark read elements
-  //=========================================================
-  function accordionChanged(index){
-    if (accordionExpandedIndex_last >= 0){
-      let id = blogPosts[accordionExpandedIndex_last].id
-      let newBlogPosts = blogPosts.map((item) => {
-        if (item.id === id) {
-          //const updatedItem = {
-          //  ...item,
-          //  readed: true,
-          //};
-          let updatedItem = item;
-          updatedItem.is_updated = true;
-          return updatedItem;
-        }
-        return item;
-      });
-      setBlogPosts(newBlogPosts);
+  if (alarm > 0){
+    console.log('alarm...:', alarm)
+    if (client.readyState === client.CLOSED){
+      console.log('new client started...')
+      client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
     }
-    accordionExpandedIndex_last = index;
   }
-  //=========================================================
- 
+
+  useLayoutEffect(
+    () => {
+      //---------------------------------------------------------
+      // initialization of protocolIO
+      //---------------------------------------------------------
+      //protocolIO.setPostDictionary(blogPosts, setBlogPosts)
+
+      //---------------------------------------------------------
+      //const [keepAlive, setKeepAlive] = useState(1);
+
+      //---------------------------------------------------------
+      client.onopen = () => {
+        console.log('onopen')
+
+        clearInterval(timeoutId);
+
+        //clear posts
+        //let posts = new Array();
+        //setBlogPosts(posts)
+
+        //request the id-list from server
+        const request = protocolIO.requestIdList();
+        //console.log('onopen REQ: ', request);
+        client.send(request);
+      };
+
+      //---------------------------------------------------------
+      client.onmessage = (message) => {
+        //console.log('onmessage: ', message.data)
+
+        if (protocolIO.isIdle)
+          setRefresh( value => value + 1 );
+
+
+        const response = protocolIO.processMessage(message.data);
+        if (response !== undefined){
+          //console.log('onmessage RESP: ', response);
+          client.send(response);
+        }
+
+        clearInterval(timeoutId);
+
+        //if (protocolIO.isIdle)
+          setRefresh( value => value + 1 );
+
+        //console.log('refresh :', refresh)
+
+        //let posts = new Array(...protocolIO.receivedPosts);
+        //setBlogPosts(posts)
+      };
+
+      //---------------------------------------------------------
+      client.onerror = () => {
+        console.log('onerror')
+        
+        clearInterval(timeoutId);
+        timeoutId = setInterval( () => setAlarm((currentNumber) => currentNumber + 1), 10000);
+      };
+        
+      //---------------------------------------------------------
+    }, []
+  )
+
+  
+//size='md'
+
+//w='80vw'
+//50px
   return (
-    <div>
-      <Center w='80vw' h='50px'  color='#DDDDDD' border='1px' borderRadius='8px' mb='25px'>
-        <Heading size='md' color='black' >Word counter for target www.thekey.academy wordpress blogposts</Heading>        
+    <Box h='90vh'>
+      <Center  minH='10%'  color='#DDDDDD' border='1px' borderRadius='8px' mb='25px'>
+        <Heading color='black' >Word counter for target www.thekey.academy wordpress blogposts</Heading>        
       </Center>
-      <Accordion onChange={(index) => accordionChanged(index) } w='80vw' allowToggle>
-        {renderBlogPosts(blogPosts)}
-      </Accordion>
-      <Button onClick={fn1}>fn1</Button>
-      <Button onClick={fn2}>fn2</Button>
-      <Button onClick={fn3}>fn3</Button>
-      <WebSocketHandler/>
-    </div>
+
+      <BlogPosts posts = {protocolIO.receivedPosts} />
+
+    </Box>
   );
+  //<WebSocketHandler messenger='sender1' />
 }
+
+/*
+        <BP>
+          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
+          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
+          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
+          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
+        </BP>
+*/
+
 
 export default App

@@ -16,8 +16,9 @@ export class ProtocolIO{
     static #uniqueId = 0;
 
     // the received posts, and the set function to update the UI
-    #receivedPosts = undefined;
-    #setFn = undefined;
+    #receivedPosts = [];
+    #setFn = undefined
+
     // sets to store the ids of new and modified posts
     #pending_ids = new Set();
 
@@ -45,16 +46,24 @@ export class ProtocolIO{
         this.#setFn = setFn;
     }
 
+    get receivedPosts(){
+        return this.#receivedPosts
+    }
+
+    get isIdle(){
+        return (this.#loopCounter === 0) && ((this.#pending_ids_tmp === undefined) || (this.#pending_ids_tmp.size === 0));
+    }
+
     // CLIENT --> {'req': 'id_list'}
     requestIdList(){
-        this.#assertIfNotInitialized();
+        //this.#assertIfNotInitialized();
         const msgObj = {req: 'id_list'};
         return JSON.stringify(msgObj);
     }
 
     // CLIENT --> {'req': 'post', 'id': 14333}
     requestPost(postId){
-        this.#assertIfNotInitialized();
+        //this.#assertIfNotInitialized();
         const msgObj = {req: 'post', id: postId};
         return JSON.stringify(msgObj);
     }
@@ -81,7 +90,8 @@ export class ProtocolIO{
                 // create a new dictionary where the listed elements are removed
                 const newReceivedPosts = this.#receivedPosts.filter((item) => !deleted_ids.has(item.id))
                 // update the UI
-                this.#setFn(newReceivedPosts);
+                this.#receivedPosts = newReceivedPosts
+                //this.#setFn(newReceivedPosts);
             }
             if (obj['modified_posts'] !== undefined){
                 obj['modified_posts'].forEach(element => { this.#pending_ids.add(element) });
@@ -98,30 +108,41 @@ export class ProtocolIO{
                 # SERVER --> {'ack': 'id_list', 'obj': [12345, 4321, ...]}
                 # (Returns the available id-s)
                 # ========================================================================= */
-                case 'id_list':                    
+                case 'id_list':  {                  
                     if (obj['obj'] !== undefined){
-                        obj['obj'].forEach(element => { this.#pending_ids.add(element) });
+                        obj['obj'].forEach(post_id =>   { 
+                                                            this.#pending_ids.add(post_id);
+                                                            let tmpPost = {id: parseInt(post_id), words: undefined}
+                                                            this.#receivedPosts.push(tmpPost);
+                                                        });
                     }
 
-                    console.log('ID_LIST', this.#pending_ids)                    
+                    console.log('ID_LIST', this.#pending_ids)
+                }
                 break;
 
                 /*
                 # =========================================================================
-                # SERVER --> {'ack': 'post', 'obj': {'id': 17444, title: 'This is a title', is_updated: True, words: {...}}
+                # SERVER --> {'ack': 'post', 'obj': {'id': 17444, title: 'This is a title', status: ***, words: {...}}
                 # (Returns the requested post or 'None'/null if the post not exists)
                 # ========================================================================= */    
-                case 'post': 
+                case 'post': {
                     if (obj['obj'] !== undefined){
                         const post = obj['obj'];
                         receivedId = post['id'];
+
                         if (receivedId != undefined){
-                            this.#receivedPosts.push(post);
-                            this.#setFn(this.#receivedPosts);
+                            let idx = this.#receivedPosts.findIndex(item => item.id === receivedId);
+                            if (idx > -1)
+                                this.#receivedPosts[idx] = post;
+                                //delete this.#receivedPosts[idx];
+                            else
+                                this.#receivedPosts.push(post);
                         }                         
                     }
 
                     console.log('POST: ', obj['obj']);
+                }
                 break;
             }
         }
