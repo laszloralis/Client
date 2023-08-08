@@ -1,6 +1,6 @@
 
 // React elements
-import { useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 
 //=========================================================
@@ -11,7 +11,7 @@ let channels = {};
 //=========================================================
 // Channel class
 //=========================================================
-export class Channel {
+class Channel {
     #name = '';
     #clients = {};
     static #cnt = 0;
@@ -54,21 +54,68 @@ export class Channel {
 
       }
     }
-  }
+}
+
+class ChannelRef{
+    #name = '';
+    
+    constructor(name){ this.#name = name; }
+
+    notify(message){
+        Channel.send(name, message);
+    }
+
+}
+
+
+const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
+
 
 
 //=========================================================
 // createChannel
 //=========================================================
-export function createChannel(chanelName){
-    let channelObj = channels[chanelName];
+function createChannel(chanelName){
+    let channelObj = undefined;
 
     //on register
     useEffect( () => {
-        if (channelObj === undefined){
-            channelObj = new Channel(chanelName);
-            channels[chanelName] = channelObj;
-        }
+        // Always create a new channel (to avoid issues in React.StrictMode)
+        channelObj = new Channel(chanelName);
+        channels[chanelName] = channelObj;
+        
+        console.log('createChannel - useEffect');
+        console.log(channels);
+        //on unregister
+        return ( () => delete channels[chanelName] );
+        },[]
+    )
+    
+    function waiting(){
+        channelObj = channels[chanelName];
+        if (channelObj === undefined)
+            setTimeout(waiting, 200);
+    }
+
+    console.log('before get')
+    waiting();
+    console.log('after get')
+
+    return channelObj;
+}
+
+
+function createChannel1(chanelName){
+    //let channelObj = channels[chanelName];
+    //const channelObj = useRef(channels[chanelName]);
+    //const [channelObj, setChannelObj] = useState(undefined);
+
+    //on register
+    useEffect( () => {
+        // Always create a new channel (to avoid issues in React.StrictMode)
+        //channelObj = new Channel(chanelName);
+        setChannelObj(new Channel(chanelName));
+        channels[chanelName] = channelObj;
         
         console.log('createChannel - useEffect');
         console.log(channels);
@@ -79,11 +126,20 @@ export function createChannel(chanelName){
 
     return channelObj;
 }
-  
+
+//=========================================================
+// getChannel
+//=========================================================
+function getChannel(chanelName){
+    const channelObj = channels[chanelName];
+    return channelObj;
+}
+
 //=========================================================
 // useChannel
 //=========================================================
-export function useChannel(chanelName, subscriberId){
+function useChannel(chanelName, subscriberId){
+
     const [message, setMessage] = useState('');
 
     //on register
@@ -112,3 +168,4 @@ export function useChannel(chanelName, subscriberId){
     return message;
 }
 
+export {Channel, createChannel, getChannel, useChannel};

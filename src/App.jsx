@@ -3,12 +3,11 @@
 //#########################################################
 
 import './App.css'
-import {ProtocolIO} from "./protocol.js";
 
-import {Channel, createChannel, useChannel} from "./channels.js";
+import Communication from "./components/Communication.jsx"
 
-//  Websocket
-import { w3cwebsocket as W3CWebSocket } from "websocket";
+import {Channel, createChannel, getChannel, useChannel} from "./scripts/channels.js";
+
 
 // React elements
 import { useState, useRef, useEffect, useLayoutEffect, useTransition } from 'react'
@@ -41,84 +40,10 @@ import {
 //we must use 'useDimensions' although it is marked as deprecated because 'useSize' is not awailable yet
 import { useConst, useDimensions } from '@chakra-ui/react'
 
-//#########################################################
-// Globals
-//#########################################################
-
-//=========================================================
-//  Websocket
-//=========================================================
-let client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
-let timeoutId = -1;
-
-//=========================================================
-// ProtocolIO
-//=========================================================
-let protocolIO = new ProtocolIO()
-
-//=========================================================
-// for accordionChanged function
-//=========================================================
-let accordionExpandedIndex_last = -1
-
-
 
 //#########################################################
 //  React Components and functions
 //#########################################################
-
-//=========================================================
-//  Websocket Handler with ToastContainer
-//=========================================================
-let StateMessages = () => {
-  const toast = useToast()
-
-  const [alarm, setAlarm] = useState(0);
-  //const [keepAlive, setKeepAlive] = useState(1);
-
-  //---------------------------------------------------------
-  client.onopen = () => {
-    console.log('onopen')
-
-    // TODO!!! - clear receivedPosts
-
-    //request the id-list from server
-    const request = protocolIO.requestIdList();
-    console.log('onopen REQ: ', request);
-    client.send(request);
-
-    toast.closeAll();
-    setAlarm(0); clearInterval(timeoutId);
-    return <>{toast({id: 100, title: 'Connected to the server!', status: 'success', duration: 5000, isClosable: true })}</>;
-  };
-  //---------------------------------------------------------
-  client.onmessage = (message) => {
-    console.log('onmessage: ', message.data)
-
-    const response = protocolIO.processMessage(message.data);
-    if (response !== undefined){
-      console.log('onmessage RESP: ', response);
-      client.send(response);
-      return undefined;
-    }
-  };
-  //---------------------------------------------------------
-  client.onerror = function() {
-    console.log('onerror')
-    
-    clearInterval(timeoutId);
-    timeoutId = setTimeout( () => setAlarm((currentNumber) => currentNumber + 1), 1000);
-
-    if ((alarm < 2) && (!toast.isActive(400)))
-      return <>{toast({id: 400, title: 'Connection error!', status: 'error', duration: null, isClosable: true })} </>;
-    else if (!toast.isActive(500)){
-      toast.closeAll();
-      return <>{toast({id: 500, title: 'Failed to connect - Connection will be established if server is available...', status: 'warning', duration: null, isClosable: true })} </>;
-    }
-  };
-  //---------------------------------------------------------
-};
-
 
 //=========================================================
 //  details
@@ -251,7 +176,10 @@ function PostReady({post}){
   console.log('PostReady ', post.id);
 
   const newColor = '#F7FFF7';
+  const newBorderColor = '#E7EFE7';
+
   const oldColor = '#E0E0E0';
+  const oldBorderColor = '#C0C0C0';
 
   const [isPending, startTransition] = useTransition();
   const [wordComponent, setWordComponent] = useState(undefined);
@@ -272,9 +200,10 @@ function PostReady({post}){
   };
 
   const color = (post.status !== 'old') ? newColor : oldColor;
-  return (  <AccordionItem bgColor={color}>
+  const borderColor = (post.status !== 'old') ? newBorderColor : oldBorderColor;
+  return (  <AccordionItem bgColor={color} ml='8px' mr='8px' mt='2px' mb='2px' border='0' borderColor={borderColor}>
               <h2>
-                <AccordionButton visibility color='black' onClick={handleClick}>
+                <AccordionButton visibility color='black' border='1px' borderColor={borderColor} onClick={handleClick} >
                   <Box as="span" flex='1' textAlign='left'>
                     {post.title}
                   </Box>
@@ -335,7 +264,7 @@ function BlogPosts({posts}){
   const components = posts.map( (blogPost) => <Post key = {blogPost.id} post = {blogPost} />);
 
   return(
-    <Accordion w='95vw' h='90%'  allowToggle overflowX="auto" onChange={handleChg}>
+    <Accordion w='95vw' h='90%' allowToggle /*allowMultiple*/ overflowX="auto" onChange={handleChg} >
       {components}
     </Accordion>
   );
@@ -376,10 +305,10 @@ function TestComponent({name}){
 // App
 //#########################################################
 function App() {
-  //const [blogPosts, setBlogPosts] = useState([]);
-  const [refresh, setRefresh] = useState(0);
-  const [alarm, setAlarm] = useState(0);
+  const channel = createChannel('global');
+  console.log('App: ', channel);
 
+  /*
   if (alarm > 0){
     console.log('alarm...:', alarm)
     if (client.readyState === client.CLOSED){
@@ -391,22 +320,10 @@ function App() {
   useLayoutEffect(
     () => {
       //---------------------------------------------------------
-      // initialization of protocolIO
-      //---------------------------------------------------------
-      //protocolIO.setPostDictionary(blogPosts, setBlogPosts)
-
-      //---------------------------------------------------------
-      //const [keepAlive, setKeepAlive] = useState(1);
-
-      //---------------------------------------------------------
       client.onopen = () => {
         console.log('onopen')
 
         clearInterval(timeoutId);
-
-        //clear posts
-        //let posts = new Array();
-        //setBlogPosts(posts)
 
         //request the id-list from server
         const request = protocolIO.requestIdList();
@@ -432,11 +349,6 @@ function App() {
 
         //if (protocolIO.isIdle)
           setRefresh( value => value + 1 );
-
-        //console.log('refresh :', refresh)
-
-        //let posts = new Array(...protocolIO.receivedPosts);
-        //setBlogPosts(posts)
       };
 
       //---------------------------------------------------------
@@ -450,19 +362,36 @@ function App() {
       //---------------------------------------------------------
     }, []
   )
+*/
 
-  
-//size='md'
 
-//w='80vw'
-//50px
+  let receivedPosts = [];
+
+
+  function dispatcherFn(target){
+
+    console.log(channel);
+    console.log(getChannel('global'));
+
+
+    if (target !== undefined){
+      console.log('CB: notify ', target);
+      channel.notify(target);
+    } else {
+      console.log('CB: notify blogPosts');
+      channel.notify('BlogPosts');
+    }
+  }
+
   return (
     <Box h='90vh'>
       <Center  minH='10%'  color='#DDDDDD' border='1px' borderRadius='8px' mb='25px'>
         <Heading color='black' >Word counter for target www.thekey.academy wordpress blogposts</Heading>        
       </Center>
 
-      <BlogPosts posts = {protocolIO.receivedPosts} />
+      <Communication posts={receivedPosts} eventDispatcher={dispatcherFn}/>
+
+      <BlogPosts posts = {receivedPosts} />
 
     </Box>
   );
