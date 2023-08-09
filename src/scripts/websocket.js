@@ -1,24 +1,11 @@
 //  Websocket
 import { w3cwebsocket as W3CWebSocket } from "websocket";
+import {Channel} from "../scripts/channels.js";
 
-
-class TestClass{
-    #callbackFn = undefined;
-    #counter = 0;
-
-    constructor(callbackFn){
-        this.#callbackFn = callbackFn;
-
-        const self = this;
-        setInterval(() => self.testFn() , 2500);
-    }
-
-    testFn(){
-        this.#callbackFn(this.#counter++);
-    }
-}
 
 class WebsocketIO{
+    static CHANNEL_NAME = 'WebsocketIO';
+    static CONNECTION_PERMANENT_ERROR = -2;
     static CONNECTION_ERROR = -1;
     static CONNECTION_CLOSED = 0;
     static CONNECTION_OPENED = 1;
@@ -28,21 +15,22 @@ class WebsocketIO{
 
     #client = undefined;
     #timeoutId = undefined;
-    #statusCallbackFn = undefined;
+    #timeOutCounter = 0;
+    #errorCounter = 0;
+
     #protocolCallbackFn = undefined;
 
-    constructor(protocolCallbackFn, statusCallbackFn){
-        console.log('WebsocketIO.constructor');
+    constructor(protocolCallbackFn){
+        console.log('WebsocketIO.constructor, cb: ', protocolCallbackFn);
 
         this.#client = new W3CWebSocket(WebsocketIO.address);
         this.#protocolCallbackFn = protocolCallbackFn;
-        this.#statusCallbackFn = statusCallbackFn;
         //initialize the websocket callback functions
         this.#websocketCallbacks();
     }
 
     send(message){
-        console.log('client: ', this.#client)
+        console.log('WebsocketIO.SEND: ', message)
         this.#client.send(message);
     }
 
@@ -51,40 +39,63 @@ class WebsocketIO{
 
         // onopen
         this.#client.onopen = () => {
-            console.log('ONOPEN');
-            //notify the GUI about the success
-            self.#statusCallbackFn(WebsocketIO.CONNECTION_OPENED);
-            //call the protocol function
+            console.log('WebsocketIO.ONOPEN');
+            // notify the GUI about the success
+            Channel.notify(WebsocketIO.CHANNEL_NAME, 'Status', WebsocketIO.CONNECTION_OPENED);
+            // call the protocol function
             self.#protocolCallbackFn();
+            // clear timeout
+            this.#clearTimeout();
+            // clear error counter
+            this.#errorCounter = 0;
         }
 
         // onmessage
         this.#client.onmessage = (message) => {
-            console.log('ONMESSAGE');
-            //call the protocol function
+            console.log('WebsocketIO.ONMESSAGE');
+            // call the protocol function
             self.#protocolCallbackFn(message.data);
         }
 
         // onerror
         this.#client.onerror = () => {
-            console.log('ONERROR');
-            //notify the GUI about the error
-            self.#statusCallbackFn(WebsocketIO.CONNECTION_ERROR);
-            //set a timeout
-            if (this.#timeoutId !== undefined)
-                clearInterval(this.#timeoutId);
-
-            this.#timeoutId = setTimeout( () => self.#restartClient(), WebsocketIO.timeout);    
+            console.log('WebsocketIO.ONERROR');
+                        
+            // set a timeout
+            this.#clearTimeout();
+            // increment error counter
+            ++this.#errorCounter;
+            this.#timeoutId = setInterval( () => { self.#restartClient(); }, WebsocketIO.timeout);
+            // notify the GUI about the error
+            if (this.#errorCounter < 2)
+                Channel.notify(WebsocketIO.CHANNEL_NAME, 'Status', WebsocketIO.CONNECTION_ERROR);
+            else
+                Channel.notify(WebsocketIO.CHANNEL_NAME, 'Status', WebsocketIO.CONNECTION_PERMANENT_ERROR);
         }
-
     }
 
     #restartClient(){
-        console.log('ws: timeout...');
-        if (this.#client.readyState === this.#client.CLOSED){
+        console.log('WebsocketIO.restartClient : client timeout');
+        if ( (this.#client.readyState === this.#client.CLOSED) || (this.#timeOutCounter > 5) ){
+            // set a timeout
+            this.#clearTimeout();
+            //this.#timeOutCounter = 0;
             // restarting communication...
-            console.log('ws: restarting communication...');
+            console.log('WebsocketIO.restartClient: client is closed, restarting communication...');
+            this.#client.close();
             this.#client = new W3CWebSocket(WebsocketIO.address);
+            //initialize the websocket callback functions
+            this.#websocketCallbacks();
+        } else {
+            ++this.#timeOutCounter;
+        }
+    }
+
+    #clearTimeout(){
+        if (this.#timeoutId !== undefined){
+            clearInterval(this.#timeoutId);
+            this.#timeoutId = undefined;
+            this.#timeOutCounter = 0;
         }
     }
 

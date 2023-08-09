@@ -1,26 +1,11 @@
 
 import WebsocketIO from "../scripts/websocket.js";
+import PostStorage from "./storage.js";
 
-
-/*
-
-Examples:
-
-{"ack": "post", 
-    "obj": {"id": 15423, 
-            "title": "Weniger Stress im Alltag? 6 Tipps vom Experten", 
-            "date": "2023-07-01T16:09:09", 
-            "modify_date": "2023-07-14T14:29:46", 
-            "words": {"ab": 1, "aber": 7, "abhilfe": 1, "ablaufen": 1, "absolut": 1, "absolvieren": 1, "abstrakt": 2, "achten": 2, "achtest": 1, "achtsam": 1, "achtsamkeit": 4, "adrenalin": 1, "aktiv": 3, "aktivit\u00e4t": 1, ...
-*/
 
 class ProtocolIO{
     //websocket object
     #websocketIO = undefined;
-    #eventCallback = undefined;
-
-    // the received posts (array)
-    #receivedPosts = undefined;
     // sets to store the ids of new and modified posts
     #pending_ids = new Set();
 
@@ -30,16 +15,11 @@ class ProtocolIO{
     #pending_ids_tmp = undefined;
     #received_ids = new Set();
 
-    bindedProcessMessage = undefined;
-
-    constructor(result, statusCallbackFn, eventCallbackFn){
+    constructor(){
+        console.log('ProtocolIO.constructor');
         // create the Websocket object and store the callback functions
-        let bindedProcessMessage = this.processMessage.bind(this);
-        this.#websocketIO = new WebsocketIO(bindedProcessMessage, statusCallbackFn);
-
-        //this.#websocketIO = new WebsocketIO(this.processMessage, statusCallbackFn);
-        this.#receivedPosts = result;
-        this.#eventCallback = eventCallbackFn;
+        const bindedProtocolCallback = this.processMessage.bind(this);
+        this.#websocketIO = new WebsocketIO(bindedProtocolCallback);
     }
 
     get isIdle(){
@@ -49,12 +29,9 @@ class ProtocolIO{
 
     // CLIENT --> {'req': 'id_list'}
     #requestIdList(){
-        console.log('before0');
         const msgObj = {req: 'id_list'};
         const message = JSON.stringify(msgObj);
-        console.log('before');
         this.#websocketIO.send(message);
-        console.log('after');
     }
 
     // CLIENT --> {'req': 'post', 'id': 14333}
@@ -70,8 +47,33 @@ class ProtocolIO{
         this.#websocketIO.send(message);
     }
 
+    #addPosts(newPosts){
+        if (newPosts.length > 0){
+            //store the new placeholders and prepare pending_ids for receive
+            newPosts.forEach(post_id =>   {
+                // received id-s should be requested from the server
+                this.#pending_ids.add(post_id);
+                // store the posts without words --> they will be shown as skeletons
+                const placeholderPost = {id: parseInt(post_id), words: undefined}
+                PostStorage.storePost(placeholderPost, false);
+            });
+            PostStorage.closeTransaction();
+        }
+    }
+
+    #deletePosts(deletedPosts){
+        if (deletedPosts.length > 0){
+            //delete posts
+            deletedPosts.forEach(post_id =>   {
+                // delete current id
+                PostStorage.deletePost(parseInt(post_id), false);
+            });
+            PostStorage.closeTransaction();
+        }
+    }
+
     processMessage(message=undefined){
-        console.log('processMessage: ', message);
+        console.log('ProtocolIO.processMessage: ', message);
         // if channel was used before, message should be defined
         if (message !== undefined){
             const obj = JSON.parse(message);
@@ -82,25 +84,19 @@ class ProtocolIO{
                 // Broadcast
                 // update the corresponding lists (add or remove elements)
                 if (obj['new_posts'] !== undefined){
-                    obj['new_posts'].forEach(element => { this.#pending_ids.add(element) });
+                    // new posts...
+                    this.#addPosts(obj['new_posts']);
                 }
                 if (obj['deleted_posts'] !== undefined){
-                    let deleted_ids = new Set();
-                    obj['deleted_posts'].forEach(element => { deleted_ids.add(element) });
-                    // create a new dictionary where the listed elements are removed
-                    const newReceivedPosts = this.#receivedPosts.filter((item) => !deleted_ids.has(item.id))
-                    // update the UI
-                    this.#receivedPosts = newReceivedPosts;
-
-                    //call event handler...
-                    this.#eventCallback();
-
+                    // deleted posts...
+                    this.#deletePosts(obj['deleted_posts']);
                 }
-                if (obj['modified_posts'] !== undefined){
-                    obj['modified_posts'].forEach(element => { this.#pending_ids.add(element) });
+                if (obj['changed_posts'] !== undefined){
+                    // modified posts...
+                    obj['changed_posts'].forEach(element => { this.#pending_ids.add(element) });
                 }
 
-                console.log('BROADCAST ', this.#pending_ids);
+                console.log('ProtocolIO.processMessage: BROADCAST');
             } else {
                 // Ack
                 switch(obj['ack']){
@@ -112,16 +108,11 @@ class ProtocolIO{
                     # ========================================================================= */
                     case 'id_list':  {                  
                         if (obj['obj'] !== undefined){
-                            obj['obj'].forEach(post_id =>   {
-                                                                // received id-s should be requested from the server
-                                                                this.#pending_ids.add(post_id);
-                                                                // store the posts without words --> they can be shown as skeletons
-                                                                let tmpPost = {id: parseInt(post_id), words: undefined}
-                                                                this.#receivedPosts.push(tmpPost);
-                                                            });
+                            // new posts...
+                            this.#addPosts(obj['obj']);
                         }
 
-                        console.log('ID_LIST', this.#pending_ids);
+                        console.log('ProtocolIO.processMessage: ID_LIST');
                     }
                     break;
 
@@ -136,16 +127,12 @@ class ProtocolIO{
                             receivedId = post['id'];
 
                             if (receivedId != undefined){
-                                let idx = this.#receivedPosts.findIndex(item => item.id === receivedId);
-                                if (idx > -1)
-                                    this.#receivedPosts[idx] = post;
-                                    //delete this.#receivedPosts[idx];
-                                else
-                                    this.#receivedPosts.push(post);
+                                //update (add or modify) the post
+                                PostStorage.storePost(post);
                             }                         
                         }
 
-                        console.log('POST: ', obj['obj']);
+                        console.log('ProtocolIO.processMessage: POST:', obj['obj']);
                     }
                     break;
                 }
@@ -158,9 +145,7 @@ class ProtocolIO{
         // if message is not defined, then the channel was just opened
         // thus, the id list should be requested from the server
         } else {
-            console.log('requestIdList0');
             this.#requestIdList();
-            console.log('requestIdList1');
         }
     }
 
@@ -181,13 +166,13 @@ class ProtocolIO{
                 //create a union from the two sets
                 this.#pending_ids_tmp = new Set([...this.#pending_ids]);
             }
+
+            console.log('ProtocolIO.updateNextPost; pending: ',this.#pending_ids_tmp)
+
+
             // last received id can be removed from the set (if valid)
             if (removeId !== undefined){
                 const id = String(removeId);
-                
-                //call event handler with the event id
-                this.#eventCallback(id);
-
                 //delete id from pending_ids_tmp
                 let r = this.#pending_ids_tmp.delete(id);
                 //and add it to received_ids

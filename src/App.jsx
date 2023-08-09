@@ -4,14 +4,13 @@
 
 import './App.css'
 
-import Communication from "./components/Communication.jsx"
-
-import {Channel, createChannel, getChannel, useChannel} from "./scripts/channels.js";
-
+import CommunicationStatus from "./components/CommunicationStatus.jsx"
+import ProtocolIO from "./scripts/protocol.js";
+import PostStorage from './scripts/storage.js';
+import {Channel, createChannel, useChannel} from "./scripts/channels.js";
 
 // React elements
-import { useState, useRef, useEffect, useLayoutEffect, useTransition } from 'react'
-
+import { useState, useRef, useEffect, useTransition } from 'react'
 
 // Chakra Elements
 import {
@@ -26,19 +25,17 @@ import {
     
     Box, 
     Tag, 
-    Button,
     Text,
     Card, CardHeader, CardBody, Wrap, WrapItem,
 
     Skeleton,
     Spacer,
     Spinner,
-    useToast,
-    Flex, 
 } from '@chakra-ui/react'
 
 //we must use 'useDimensions' although it is marked as deprecated because 'useSize' is not awailable yet
 import { useConst, useDimensions } from '@chakra-ui/react'
+
 
 
 //#########################################################
@@ -97,11 +94,6 @@ function Word({word, count}){
     </WrapItem>
   );
 }
-/*
-      <Box borderRadius = '10px' border = '1px' spacing='2px' bg={color} pl='8px' pr='8px'>
-        {word} : {count}
-      </Box> 
-*/
 
 //=========================================================
 // WordCard
@@ -152,8 +144,8 @@ function Words({words}){
 //=========================================================
 //  renderNotLoadedPost
 //=========================================================
-function PostSkeleton({post}){
-  console.log('PostSkeleton ', post.id);
+function PostSkeleton({id}){
+  console.log('PostSkeleton ', id);
   const randomWidth = useConst( 150 + (Math.floor(Math.random() * 100.00)) );
 
   return (
@@ -170,9 +162,9 @@ function PostSkeleton({post}){
 }
 
 //=========================================================
-//  LoadedPost
+//  Post
 //=========================================================
-function PostReady({post}){
+function Post({post}){
   console.log('PostReady ', post.id);
 
   const newColor = '#F7FFF7';
@@ -181,26 +173,26 @@ function PostReady({post}){
   const oldColor = '#E0E0E0';
   const oldBorderColor = '#C0C0C0';
 
-  const [isPending, startTransition] = useTransition();
+  const oldPost = useRef(undefined);
+
   const [wordComponent, setWordComponent] = useState(undefined);
-
-  const message = useChannel('blogPosts', post.id);
-  const lastMessage = useRef(message);
-
-  if (message !== lastMessage.current){
-    console.log(post.id, ': NEW MESSAGE RECEIVED: ', message);
-  }
+  const [isPending, startTransition] = useTransition();
 
   const handleClick = () => {
-      if ( (wordComponent === undefined) && (post.words !== undefined) ){
+      if (  (wordComponent === undefined) || 
+            (post.words !== oldPost.current.words) || 
+            (post.title !== oldPost.current.title)
+          )
+      {
         let data = null;
-        startTransition(() => { data = <Words words = {post.words} /> } );
-        setWordComponent(data);
+        startTransition(() => { data = (<Words words = {post.words} />); setWordComponent(data); } );
+        oldPost.current = post;
       }
   };
 
   const color = (post.status !== 'old') ? newColor : oldColor;
   const borderColor = (post.status !== 'old') ? newBorderColor : oldBorderColor;
+
   return (  <AccordionItem bgColor={color} ml='8px' mr='8px' mt='2px' mb='2px' border='0' borderColor={borderColor}>
               <h2>
                 <AccordionButton visibility color='black' border='1px' borderColor={borderColor} onClick={handleClick} >
@@ -221,10 +213,20 @@ function PostReady({post}){
 }
 
 //=========================================================
-//  Post
+//  PostSelector
 //=========================================================
-function Post({post}){
-  return ((post.words !== undefined) ? <PostReady post={post} /> : <PostSkeleton post={post} />);
+function PostSelector({id}){
+  console.log('PostSelector, key: ', id);
+
+  const message = useChannel(PostStorage.CHANNEL_NAME, id, true);
+  const post = useRef(undefined);
+
+  if (message.isPending()){
+    post.current = message.get();
+    console.log(post.current.id, ': NEW MESSAGE RECEIVED: ', post.current);
+  }
+
+  return ((post.current !== undefined) ? <Post post={post.current} /> : <PostSkeleton id={id} />);
 }
 
 
@@ -242,26 +244,32 @@ function Post({post}){
 //=========================================================
 //  BlogPosts
 //=========================================================
-function BlogPosts({posts}){
+function BlogPosts(){
   const lastIdx = useRef(-1);
-  
-  const bpChannel = createChannel('blogPosts');
+  const message = useChannel(PostStorage.CHANNEL_NAME, PostStorage.ID_LIST_NAME, true);
+
+  let posts = undefined;
+
+  if (message.isPending()){
+    posts = message.get();
+    console.log('idList: NEW MESSAGE RECEIVED: ', posts);
+  }
 
   const handleChg = (idx) => {
-    console.log('idx: ', idx);
-    console.log('last idx: ', lastIdx.current);
-
+    //console.log('idx, last idx: ', idx, lastIdx.current);
     if (lastIdx.current !== -1){
-      console.log('post id ', posts[lastIdx.current].id);
-
-      bpChannel.notify(posts[lastIdx.current].id);
-
-      posts[lastIdx.current].status = 'old';
+      const id = posts[lastIdx.current];
+      console.log('post id ', id);
+      // set status to 'old'
+      if (PostStorage.getPost(id).status !== 'old'){
+        const newPost = { ... PostStorage.getPost(id), status: 'old'};
+        PostStorage.storePost(newPost);  
+      }
     }
     lastIdx.current = idx;
   }
 
-  const components = posts.map( (blogPost) => <Post key = {blogPost.id} post = {blogPost} />);
+  const components = (posts !== undefined) ? posts.map( (postId) => <PostSelector key = {postId} id={postId} />) : [];
 
   return(
     <Accordion w='95vw' h='90%' allowToggle /*allowMultiple*/ overflowX="auto" onChange={handleChg} >
@@ -270,142 +278,36 @@ function BlogPosts({posts}){
   );
 }
 
-
-
-
-
-
-
-
-
-let myList = [
-  {id: '1', title:'csubi', words:[]},
-  {id: '2', title:'subi', words:[]},
-  {id: '3', title:'dubi', words:[]},
-  {id: '4', title:'lala', words:[]},
-  {id: '5', title:'lulu', words:[]},
-  {id: '6', title:'lele', words:[]},
-];
-
-function BP({children}){
-
-console.log(children);
-
-  return <>{children}</>;
-
-}
-
 function TestComponent({name}){
   console.log('Testcomponent ', name, ' rendered!');
   return (<Text>{name}</Text>);
 }
 
-
 //#########################################################
 // App
 //#########################################################
 function App() {
-  const channel = createChannel('global');
-  console.log('App: ', channel);
+  console.log('App: ');
 
-  /*
-  if (alarm > 0){
-    console.log('alarm...:', alarm)
-    if (client.readyState === client.CLOSED){
-      console.log('new client started...')
-      client = new W3CWebSocket('ws://127.0.0.1:8000'); //localhost
-    }
-  }
+  //let protocolIO = undefined;
 
-  useLayoutEffect(
-    () => {
-      //---------------------------------------------------------
-      client.onopen = () => {
-        console.log('onopen')
-
-        clearInterval(timeoutId);
-
-        //request the id-list from server
-        const request = protocolIO.requestIdList();
-        //console.log('onopen REQ: ', request);
-        client.send(request);
-      };
-
-      //---------------------------------------------------------
-      client.onmessage = (message) => {
-        //console.log('onmessage: ', message.data)
-
-        if (protocolIO.isIdle)
-          setRefresh( value => value + 1 );
-
-
-        const response = protocolIO.processMessage(message.data);
-        if (response !== undefined){
-          //console.log('onmessage RESP: ', response);
-          client.send(response);
-        }
-
-        clearInterval(timeoutId);
-
-        //if (protocolIO.isIdle)
-          setRefresh( value => value + 1 );
-      };
-
-      //---------------------------------------------------------
-      client.onerror = () => {
-        console.log('onerror')
-        
-        clearInterval(timeoutId);
-        timeoutId = setInterval( () => setAlarm((currentNumber) => currentNumber + 1), 10000);
-      };
-        
-      //---------------------------------------------------------
+  useEffect( () => {
+    console.log('App.useEffect; Create ProtocolIO');
+    // create the protocolIO object with the callback functions
+    const protocolIO = new ProtocolIO();
     }, []
-  )
-*/
+  );
 
-
-  let receivedPosts = [];
-
-
-  function dispatcherFn(target){
-
-    console.log(channel);
-    console.log(getChannel('global'));
-
-
-    if (target !== undefined){
-      console.log('CB: notify ', target);
-      channel.notify(target);
-    } else {
-      console.log('CB: notify blogPosts');
-      channel.notify('BlogPosts');
-    }
-  }
 
   return (
     <Box h='90vh'>
       <Center  minH='10%'  color='#DDDDDD' border='1px' borderRadius='8px' mb='25px'>
         <Heading color='black' >Word counter for target www.thekey.academy wordpress blogposts</Heading>        
       </Center>
-
-      <Communication posts={receivedPosts} eventDispatcher={dispatcherFn}/>
-
-      <BlogPosts posts = {receivedPosts} />
-
+      <BlogPosts />
+      <CommunicationStatus />
     </Box>
   );
-  //<WebSocketHandler messenger='sender1' />
 }
-
-/*
-        <BP>
-          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
-          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
-          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
-          { myList.map( (item) => <TestComponent key = {item.id} name = {item.title} />) }
-        </BP>
-*/
-
 
 export default App
