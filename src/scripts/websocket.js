@@ -1,8 +1,22 @@
-//  Websocket
+//#########################################################
+// Imports
+//#########################################################
+
 import { w3cwebsocket as W3CWebSocket } from "websocket";
+
+//=========================================================
+// Own Elements - import
+//=========================================================
 import {Channel} from "../scripts/channels.js";
 
 
+//#########################################################
+// JS Classes and functions
+//#########################################################
+
+//=========================================================
+// WebsocketIO class
+//=========================================================
 class WebsocketIO{
     static CHANNEL_NAME = 'WebsocketIO';
     static CONNECTION_PERMANENT_ERROR = -2;
@@ -20,6 +34,8 @@ class WebsocketIO{
 
     #protocolCallbackFn = undefined;
 
+
+
     constructor(protocolCallbackFn){
         console.log('WebsocketIO.constructor, cb: ', protocolCallbackFn);
 
@@ -29,10 +45,12 @@ class WebsocketIO{
         this.#websocketCallbacks();
     }
 
+
     send(message){
         console.log('WebsocketIO.SEND: ', message)
         this.#client.send(message);
     }
+
 
     #websocketCallbacks(){
         const self = this;
@@ -74,6 +92,7 @@ class WebsocketIO{
         }
     }
 
+
     #restartClient(){
         console.log('WebsocketIO.restartClient : client timeout');
         if ( (this.#client.readyState === this.#client.CLOSED) || (this.#timeOutCounter > 5) ){
@@ -91,6 +110,7 @@ class WebsocketIO{
         }
     }
 
+    
     #clearTimeout(){
         if (this.#timeoutId !== undefined){
             clearInterval(this.#timeoutId);

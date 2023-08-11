@@ -1,23 +1,43 @@
+//#########################################################
+// Imports
+//#########################################################
 
+//=========================================================
+// Own Elements - import
+//=========================================================
 import WebsocketIO from "../scripts/websocket.js";
 import {useChannel} from "../scripts/channels.js";
 
+//=========================================================
+// React Elements - import
+//=========================================================
 import { useEffect } from 'react'
 
-// Chakra Elements
+//=========================================================
+// Chakra Elements - import
+//=========================================================
 import {
   useToast,
 } from '@chakra-ui/react'
 
 
+//#########################################################
+// Components and helper functions
+//#########################################################
+
+//=========================================================
+// CommunicationStatus ( websocket I/O status - component )
+//=========================================================
 function CommunicationStatus(){
   const toast = useToast();
+  // Channel definition
   const message = useChannel('WebsocketIO', 'Status', true);
 
   let status = undefined;
   let component = false;
 
   useEffect(() => {
+    // Message handler (in useEffect to avoid warnings by render)
     status = message.get();
     //console.log('CommunicationStatus: NEW MESSAGE RECEIVED: ', status);
 

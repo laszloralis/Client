@@ -1,9 +1,19 @@
+//#########################################################
+// Imports
+//#########################################################
 
+//=========================================================
+// Own Elements - import
+//=========================================================
 import {Channel} from "./channels.js";
 
 
+//#########################################################
+// JS Classes and functions
+//#########################################################
+
 //=========================================================
-//  PostStorage class
+// PostStorage class
 //=========================================================
 class PostStorage{
     static CHANNEL_NAME = 'Posts';
@@ -23,6 +33,7 @@ class PostStorage{
             PostStorage.closeTransaction();
     }
 
+
     static deletePost(id, closeTransaction=true){
         console.log('PostStorage.deletePosts, id: ', id);
 
@@ -34,6 +45,7 @@ class PostStorage{
         }
     }
   
+    
     static getPost(id){
         const post = PostStorage.#posts.find(item => item.id === id);
         return post;

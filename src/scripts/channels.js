@@ -1,7 +1,16 @@
+//#########################################################
+// Imports
+//#########################################################
 
-// React elements
+//=========================================================
+// React Elements - import
+//=========================================================
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 
+
+//#########################################################
+// JS Classes and functions
+//#########################################################
 
 //=========================================================
 // Channel class
@@ -107,10 +116,6 @@ class Message{
 }
 
 
-
-//const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
-
-
 //=========================================================
 // createChannel
 //=========================================================
@@ -131,26 +136,6 @@ function createChannel(channelName){
     return channelRef;
 }
 
-
-function createChannel1(channelName){
-    //let channelObj = channels[chanelName];
-    //const channelObj = useRef(channels[chanelName]);
-    const [channelObj, setChannelObj] = useState(undefined);
-
-    //on register
-    useEffect( () => {
-        console.log('Channels.createChannel - useEffect');
-        // Always create a new channel (to avoid issues in React.StrictMode)
-        const channel = Channel.openChannel(channelName)
-        setChannelObj(channel);
-        Channel.logChannels();
-        //on unregister
-        return ( () => Channel.closeChannel(channelName) );
-        },[]
-    )
-
-    return channelObj;
-}
 
 //=========================================================
 // getChannel
