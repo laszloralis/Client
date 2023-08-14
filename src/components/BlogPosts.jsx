@@ -26,6 +26,11 @@ import { useConst, useDimensions } from '@chakra-ui/react'
 
 
 //#########################################################
+// constants
+//#########################################################
+const STS_OLD = 'old';
+
+//#########################################################
 // Components and helper functions
 //#########################################################
 
@@ -44,8 +49,8 @@ function getWordCountColor(count){
     const color_key = String(count);
     //function to create random intensity in r,g,b channel
     function randomIntensity(){
-        const minIntensity = 80; //0 .. 255
-        const quantum = 10;
+        const minIntensity = 80;    //0 .. 255
+        const quantum = 10;         // minimal intensity difference between colors in one color-channel
         //discreet values in range ~0..255 with quantum
         return ( Math.floor(minIntensity/quantum + Math.random() * ( (255 - minIntensity)/quantum ) ) * quantum ).toString(16);
     }
@@ -83,9 +88,9 @@ function Word({word, count}){
 // WordCard ( Word Groups - component)
 //=========================================================
 function WordCard({title, words}){
-    const maxWidth = 150;   // only estimation, we don't need an exact value
+    const maxWidth = 150;   // only estimation (px), we don't need an exact value
     const padding = 10;
-    const wordsPerRow = 10; // only estimation, we don't need an exact value
+    const wordsPerRow = 10; // only estimation (px), we don't need an exact value
 
     return(
         <Card border='1px' minW='auto' >
@@ -117,7 +122,7 @@ function Words({words}){
         const group = words.filter( (item) => { const [word, count] = item; return (last[0] === word[0]); } );
 
         components.push(
-        <WordCard key={last[0]} title={last[0]} words={group}/>
+            <WordCard key={last[0]} title={last[0]} words={group}/>
         );
 
         n += group.length;
@@ -177,8 +182,8 @@ function Post({post}){
         }
     };
 
-    const color = (post.status !== 'old') ? newColor : oldColor;
-    const borderColor = (post.status !== 'old') ? newBorderColor : oldBorderColor;
+    const color = (post.status !== STS_OLD) ? newColor : oldColor;
+    const borderColor = (post.status !== STS_OLD) ? newBorderColor : oldBorderColor;
 
     return (<AccordionItem bgColor={color} ml='8px' mr='8px' mt='2px' mb='2px' border='0' borderColor={borderColor}>
                 <h2>
@@ -240,9 +245,9 @@ function BlogPosts(){
         if (lastIdx.current !== -1){
             const id = posts[lastIdx.current];
             console.log('post id ', id);
-            // set status to 'old'
-            if (PostStorage.getPost(id).status !== 'old'){
-                const newPost = { ... PostStorage.getPost(id), status: 'old'};
+            // set status to 'old' (the possible statuses from server are 'new' and 'changed')
+            if (PostStorage.getPost(id).status !== STS_OLD){
+                const newPost = { ... PostStorage.getPost(id), status: STS_OLD};
                 PostStorage.storePost(newPost);  
             }
         }
