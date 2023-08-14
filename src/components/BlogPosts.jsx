@@ -70,10 +70,10 @@ function Word({word, count}){
 
     return (
         <WrapItem>
-        <HStack spacing='0px'>
-            <Tag h='24px' border='1px' borderRightRadius='0px' >{word}</Tag>
-            <Tag h='24px' borderTop='1px' borderRight='1px' borderBottom='1px' bg={color} borderLeftRadius='0px'>{count}</Tag>
-        </HStack>
+            <HStack spacing='0px'>
+                <Tag h='24px' border='1px' borderRightRadius='0px' >{word}</Tag>
+                <Tag h='24px' borderTop='1px' borderRight='1px' borderBottom='1px' bg={color} borderLeftRadius='0px'>{count}</Tag>
+            </HStack>
         </WrapItem>
     );
 }
@@ -89,14 +89,14 @@ function WordCard({title, words}){
 
     return(
         <Card border='1px' minW='auto' >
-        <CardHeader>
-            <Heading> {title} </Heading>
-        </CardHeader>
-        <CardBody>
-            <Wrap minW='min-content' w= {padding + words.length * maxWidth / Math.min(words.length, wordsPerRow) } direction='row' spacing='10px' justify='center'>
-            {words.map((item) => <Word key={item[0]} word={item[0]} count={item[1]} /> )}
-            </Wrap>
-        </CardBody>
+            <CardHeader>
+                <Heading> {title} </Heading>
+            </CardHeader>
+            <CardBody>
+                <Wrap minW='min-content' w= {padding + words.length * maxWidth / Math.min(words.length, wordsPerRow) } direction='row' spacing='10px' justify='center'>
+                    {words.map((item) => <Word key={item[0]} word={item[0]} count={item[1]} /> )}
+                </Wrap>
+            </CardBody>
         </Card>
     );
 }
@@ -136,13 +136,13 @@ function PostSkeleton({id}){
 
     return (
         <AccordionItem isDisabled>
-        <h2>
-            <AccordionButton>
-            <Skeleton border='1px' borderRadius='6px' w={randomWidth} h='25px'/>
-            <Spacer/>
-            <AccordionIcon />
-            </AccordionButton>
-        </h2>
+            <h2>
+                <AccordionButton>
+                    <Skeleton border='1px' borderRadius='6px' w={randomWidth} h='25px'/>
+                    <Spacer/>
+                    <AccordionIcon />
+                </AccordionButton>
+            </h2>
         </AccordionItem>
     )
 }
@@ -180,22 +180,21 @@ function Post({post}){
     const color = (post.status !== 'old') ? newColor : oldColor;
     const borderColor = (post.status !== 'old') ? newBorderColor : oldBorderColor;
 
-    return (  <AccordionItem bgColor={color} ml='8px' mr='8px' mt='2px' mb='2px' border='0' borderColor={borderColor}>
+    return (<AccordionItem bgColor={color} ml='8px' mr='8px' mt='2px' mb='2px' border='0' borderColor={borderColor}>
                 <h2>
                     <AccordionButton visibility color='black' border='1px' borderColor={borderColor} onClick={handleClick} >
-                    <Box as="span" flex='1' textAlign='left'>
-                        {post.title}
-                    </Box>
+                        <Box as="span" flex='1' textAlign='left'>
+                            {post.title}
+                        </Box>
                     <AccordionIcon />
                     </AccordionButton>
                 </h2>
                 <AccordionPanel pb={4} >
-                
                     <HStack spacing='10px' overflowX="auto" pb='15px' align='top'>
-                    {isPending === false ? wordComponent : <Spinner key='spinner' />}
+                        {isPending === false ? wordComponent : <Spinner key='spinner' />}
                     </HStack>
                 </AccordionPanel>
-                </AccordionItem>
+            </AccordionItem>
             );
 }
   
@@ -239,13 +238,13 @@ function BlogPosts(){
     const handleChg = (idx) => {
         //console.log('idx, last idx: ', idx, lastIdx.current);
         if (lastIdx.current !== -1){
-        const id = posts[lastIdx.current];
-        console.log('post id ', id);
-        // set status to 'old'
-        if (PostStorage.getPost(id).status !== 'old'){
-            const newPost = { ... PostStorage.getPost(id), status: 'old'};
-            PostStorage.storePost(newPost);  
-        }
+            const id = posts[lastIdx.current];
+            console.log('post id ', id);
+            // set status to 'old'
+            if (PostStorage.getPost(id).status !== 'old'){
+                const newPost = { ... PostStorage.getPost(id), status: 'old'};
+                PostStorage.storePost(newPost);  
+            }
         }
         lastIdx.current = idx;
     }
@@ -254,7 +253,7 @@ function BlogPosts(){
 
     return(
         <Accordion w='95vw' h='90%' allowToggle /*allowMultiple*/ overflowX="auto" onChange={handleChg} >
-        {components}
+            {components}
         </Accordion>
     );
 }
